@@ -196,6 +196,7 @@
     .editor-tools { display: flex; flex-wrap: wrap; gap: 10px; }
     #delete-added-text[hidden] { display: none; }
     #delete-pdf-text[hidden] { display: none; }
+    #copy-selected-text[hidden], #paste-copied-text[hidden] { display: none; }
     .text-options { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(4, auto); gap: 12px; align-items: end; padding: 14px; background: #f4f8f7; border: 1px solid var(--border); border-radius: 12px; }
     .text-options[hidden] { display: none; }
     .text-options label { display: grid; gap: 6px; font-size: 13px; }
@@ -203,7 +204,7 @@
     .text-options input[type="number"] { width: 80px; }
     .text-options input[type="color"] { width: 50px; height: 40px; padding: 3px; border: 1px solid var(--border); border-radius: 8px; background: white; cursor: pointer; }
     .text-options select { min-width: 130px; }
-    #editor-bold { background: white; color: var(--text); min-height: 40px; }
+    #editor-bold { background: white; color: var(--text); min-height: 40px; padding: 8px 14px; border: 1px solid var(--border); font-weight: 750; }
     #editor-bold[aria-pressed="true"] { background: #0b4f49; color: white; border-color: #0b4f49; }
     #replace-text[hidden] { display: none; }
     .selected-text { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
@@ -318,7 +319,7 @@
       <div class="view-heading">
         <p class="eyebrow">PDF editor</p>
         <h1>Edit and redact a PDF</h1>
-        <p>Zoom in to select details, add and resize text, replace or delete selectable text, or redact an area.</p>
+        <p>Zoom in to select details, add and resize text, copy text to another spot, replace or delete selectable text, or redact an area.</p>
       </div>
       <form id="editor-open-form" class="row">
         <label for="editor-file">PDF to edit</label>
@@ -374,13 +375,15 @@
             </label>
             <button type="button" id="replace-text" hidden>Replace selected text</button>
             <button type="button" id="delete-pdf-text" class="btn-secondary" hidden>Delete selected PDF text</button>
+            <button type="button" id="copy-selected-text" class="btn-secondary" hidden>Copy selected text</button>
+            <button type="button" id="paste-copied-text" hidden>Paste copied text</button>
             <p class="selected-text" id="selected-text" hidden></p>
           </div>
         </div>
         <div class="page-viewport" id="page-viewport">
           <div class="page-stage" id="page-stage">
             <img id="editor-page-image" alt="PDF page preview" />
-            <canvas id="editor-overlay" tabindex="0" aria-label="Select an area to redact, add and resize text, or select existing text. Press Delete to remove selected text."></canvas>
+            <canvas id="editor-overlay" tabindex="0" aria-label="Select an area to redact, add and resize text. Drag the selected text corner horizontally to change width and vertically to change height. Press Delete to remove selected text."></canvas>
           </div>
         </div>
         <div class="editor-controls">
@@ -547,6 +550,6 @@
       }
     });
   </script>
-  <script src="/static/editor.js"></script>
+  <script src="/static/editor.js?v=copy-paste-text"></script>
 </body>
 </html>

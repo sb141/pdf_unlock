@@ -59,6 +59,8 @@ class AddedText(BaseModel):
     font_size: FiniteFloat = Field(ge=6, le=72)
     font_name: PdfFontName = "helv"
     color: str = Field(default="#000000", pattern=r"^#[0-9a-fA-F]{6}$")
+    scale_x: FiniteFloat = Field(default=1, ge=0.25, le=8)
+    scale_y: FiniteFloat = Field(default=1, ge=0.25, le=8)
 
 
 class TextReplacement(BaseModel):

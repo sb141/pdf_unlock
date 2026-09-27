@@ -6,7 +6,7 @@ A web app for unlocking password-protected PDFs and editing their pages. The hom
 
 - Unlock one PDF or a batch with the correct password. View the result for each file and download successful files individually or as a ZIP.
 - Zoom and scroll through PDF pages while editing.
-- Add text, then move, resize, recolor, change its font, or delete it before saving.
+- Add text, then move it, resize its width and height separately, recolor it, change its font, or delete it before saving.
 - Replace or delete selectable PDF text.
 - Redact a selected area and download a new PDF with the page content in that area removed.
 
@@ -53,8 +53,8 @@ Open **Edit & redact** and choose a PDF. If it is locked, enter its password. Yo
 
 1. Use **Zoom** to enlarge the page and scroll to the content you want to change.
 2. Choose **Redact area** and drag a rectangle over the content to remove. The saved area is filled black.
-3. Choose **Add text**, enter the text and its size, font, and color, and use **Bold** if needed. Click the page to place it. Click placed text to select it. Drag it to move it, drag the corner handle to resize it, change the size, font, color, or bold setting, or click **Delete added text**.
-4. Choose **Edit text** and click a highlighted text run. Enter new text or change its style, including **Bold**, then click **Replace selected text**. Click **Delete selected PDF text** to remove it without a replacement.
+3. Choose **Add text**, enter the text and its size, font, and color, and use **Bold** if needed. Click the page to place it. Click placed text to select it. Drag it to move it. Drag its corner horizontally to change width, vertically to change height, or diagonally to change both. You can also change its size, font, color, or bold setting, or click **Delete added text**.
+4. Choose **Edit text** and click a highlighted text run. Enter new text or change its style, including **Bold**, then click **Replace selected text**. To duplicate the text elsewhere, click **Copy selected text**, then **Paste copied text**, and click the destination on the page. The original stays in place. Click **Delete selected PDF text** to remove it without a replacement.
 5. Use **Undo last edit** or **Clear this page** to revise pending changes. Press Delete or Backspace while the page is focused to remove selected text. Click **Apply edits and download** to create and download the edited PDF.
 
 The source PDF remains unchanged. Editing works on up to 200 pages per PDF. Edit sessions expire after one hour by default; generated downloads expire after five minutes by default.

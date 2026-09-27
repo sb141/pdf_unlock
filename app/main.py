@@ -50,7 +50,10 @@ app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")
 @app.get("/unlock")
 @app.get("/edit")
 def root() -> FileResponse:
-    return FileResponse(Path(__file__).parent / "static" / "index.html")
+    return FileResponse(
+        Path(__file__).parent / "static" / "index.html",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"},
+    )
 
 
 @app.get("/healthz")

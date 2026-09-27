@@ -148,7 +148,8 @@ def apply_edits(
             point = _point_on_page(document[edit.page], edit)
             try:
                 document[edit.page].insert_text(
-                    point, edit.text, fontsize=edit.font_size, fontname=edit.font_name, color=_rgb(edit.color)
+                    point, edit.text, fontsize=edit.font_size, fontname=edit.font_name, color=_rgb(edit.color),
+                    morph=(point, pymupdf.Matrix(edit.scale_x, 0, 0, edit.scale_y, 0, 0)),
                 )
             except Exception as exc:
                 raise PdfEditError("Could not add text at this position") from exc

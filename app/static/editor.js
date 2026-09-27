@@ -19,6 +19,8 @@
   const replaceToolButton = document.getElementById("tool-replace");
   const replaceButton = document.getElementById("replace-text");
   const deletePdfTextButton = document.getElementById("delete-pdf-text");
+  const copySelectedTextButton = document.getElementById("copy-selected-text");
+  const pasteCopiedTextButton = document.getElementById("paste-copied-text");
   const deleteAddedTextButton = document.getElementById("delete-added-text");
   const textOptions = document.getElementById("text-options");
   const textLabel = document.getElementById("editor-text-label");
@@ -47,6 +49,8 @@
   let selectedAddedText = null;
   let movingText = null;
   let resizingText = null;
+  let copiedText = null;
+  let pasteMode = false;
 
   async function apiError(response) {
     const body = await response.json().catch(() => ({}));
@@ -69,6 +73,15 @@
   function selectAddedText(edit) {
     selectedAddedText = edit;
     deleteAddedTextButton.hidden = tool !== "text" || !edit;
+    syncCopyPasteButtons();
+  }
+
+  function syncCopyPasteButtons() {
+    const hasSelectedText = tool === "text" ? Boolean(selectedAddedText)
+      : tool === "replace" && Boolean(selectedSpan);
+    copySelectedTextButton.hidden = !hasSelectedText;
+    pasteCopiedTextButton.hidden = !copiedText;
+    pasteCopiedTextButton.textContent = pasteMode ? "Cancel paste" : "Paste copied text";
   }
 
   function deleteSelectedAddedText() {
@@ -129,9 +142,16 @@
     const metrics = context.measureText(edit.text);
     const x = edit.x * sx;
     const y = edit.y * sy;
-    const ascent = metrics.actualBoundingBoxAscent || edit.font_size * sy;
-    const descent = metrics.actualBoundingBoxDescent || edit.font_size * sy * 0.25;
-    return { x0: x - 5, y0: y - ascent - 5, x1: x + metrics.width + 5, y1: y + descent + 5 };
+    const scaleX = edit.scale_x || 1;
+    const scaleY = edit.scale_y || 1;
+    const ascent = (metrics.actualBoundingBoxAscent || edit.font_size * sy) * scaleY;
+    const descent = (metrics.actualBoundingBoxDescent || edit.font_size * sy * 0.25) * scaleY;
+    return {
+      x0: x - 5, y0: y - ascent - 5,
+      x1: x + metrics.width * scaleX + 5, y1: y + descent + 5,
+      contentWidth: Math.max(1, metrics.width * scaleX),
+      contentHeight: Math.max(1, ascent + descent),
+    };
   }
 
   function addedTextAt(event) {
@@ -192,8 +212,12 @@
         if (edit.text) {
           context.fillStyle = edit.color;
           context.font = fontCss(edit.font_name, Math.max(8, edit.font_size * sy));
-          context.fillText(edit.text, (edit.kind === "replace" ? edit.origin_x : edit.x) * sx,
+          context.save();
+          context.translate((edit.kind === "replace" ? edit.origin_x : edit.x) * sx,
             (edit.kind === "replace" ? edit.origin_y : edit.y) * sy);
+          context.scale(edit.scale_x || 1, edit.scale_y || 1);
+          context.fillText(edit.text, 0, 0);
+          context.restore();
         }
       }
     }
@@ -229,9 +253,11 @@
     draft = null;
     movingText = null;
     resizingText = null;
+    pasteMode = false;
     selectAddedText(null);
     canvas.style.pointerEvents = "none";
     selectedSpan = null;
+    syncCopyPasteButtons();
     selectedTextEl.hidden = true;
     replaceButton.hidden = true;
     deletePdfTextButton.hidden = true;
@@ -267,7 +293,7 @@
     statusEl.textContent = tool === "replace" && !spans.length
       ? "This page has no selectable text. Use Redact area and Add text instead."
       : tool === "replace" ? "Click highlighted text to replace or delete it."
-      : tool === "text" ? "Click to add text. Drag it to move or use the corner handle to resize."
+      : tool === "text" ? "Click to add text. Drag it to move; drag its corner horizontally for width, vertically for height, or diagonally for both."
       : "Drag over content to redact it. Use Zoom for small fields.";
   }
 
@@ -288,6 +314,8 @@
     undoStack = [];
     spans = [];
     selectedSpan = null;
+    copiedText = null;
+    pasteMode = false;
     selectAddedText(null);
     movingText = null;
     resizingText = null;
@@ -328,6 +356,7 @@
   };
 
   function setTool(nextTool) {
+    if (nextTool !== "text") pasteMode = false;
     tool = nextTool;
     redactButton.setAttribute("aria-pressed", String(tool === "redact"));
     textButton.setAttribute("aria-pressed", String(tool === "text"));
@@ -336,11 +365,12 @@
     deleteAddedTextButton.hidden = tool !== "text" || !selectedAddedText;
     deletePdfTextButton.hidden = tool !== "replace" || !selectedSpan;
     textOptions.hidden = tool === "redact";
+    syncCopyPasteButtons();
     textLabel.textContent = tool === "replace" ? "Replacement text" : "Text to add";
     replaceButton.hidden = tool !== "replace" || !selectedSpan;
     selectedTextEl.hidden = tool !== "replace" || !selectedSpan;
     statusEl.textContent = tool === "redact" ? "Drag over content to redact it."
-      : tool === "text" ? "Click to add text. Drag it to move or use the corner handle to resize."
+      : tool === "text" ? "Click to add text. Drag it to move; drag its corner horizontally for width, vertically for height, or diagonally for both."
       : spans.length ? "Click highlighted text to replace or delete it." : "This page has no selectable text. Use Redact area and Add text instead.";
     draw();
   }
@@ -350,7 +380,28 @@
   replaceToolButton.addEventListener("click", () => setTool("replace"));
   deleteAddedTextButton.addEventListener("click", deleteSelectedAddedText);
   deletePdfTextButton.addEventListener("click", deleteSelectedPdfText);
+  copySelectedTextButton.addEventListener("click", copySelectedText);
+  pasteCopiedTextButton.addEventListener("click", beginPasteCopiedText);
   canvas.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && pasteMode) {
+      event.preventDefault();
+      pasteMode = false;
+      syncCopyPasteButtons();
+      statusEl.textContent = "Paste canceled.";
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
+      if ((tool === "text" && selectedAddedText) || (tool === "replace" && selectedSpan)) {
+        event.preventDefault();
+        copySelectedText();
+      }
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v" && copiedText) {
+      event.preventDefault();
+      beginPasteCopiedText();
+      return;
+    }
     if (event.key !== "Delete" && event.key !== "Backspace") return;
     if (!(tool === "text" && selectedAddedText) && !(tool === "replace" && selectedSpan)) return;
     event.preventDefault();
@@ -424,6 +475,7 @@
         .sort((a, b) => (a.x1 - a.x0) * (a.y1 - a.y0) - (b.x1 - b.x0) * (b.y1 - b.y0))[0] || null;
       replaceButton.hidden = !selectedSpan;
       deletePdfTextButton.hidden = !selectedSpan;
+      syncCopyPasteButtons();
       selectedTextEl.hidden = !selectedSpan;
       if (selectedSpan) {
         canvas.focus({ preventScroll: true });
@@ -433,8 +485,8 @@
         fontInput.value = pending?.font_name || selectedSpan.font_name;
         syncBoldButton();
         colorInput.value = pending?.color || selectedSpan.color;
-        selectedTextEl.textContent = `Selected: "${selectedSpan.text}". Replace it or delete it.`;
-        statusEl.textContent = "Selected PDF text is ready to replace or delete.";
+        selectedTextEl.textContent = `Selected: "${selectedSpan.text}". Replace, delete, or copy it.`;
+        statusEl.textContent = "Selected PDF text is ready to replace, delete, or copy.";
       } else {
         statusEl.textContent = "Click inside a highlighted text run to select it.";
       }
@@ -442,14 +494,24 @@
       return;
     }
     if (tool === "text") {
+      if (pasteMode && copiedText) {
+        pasteCopiedTextAt(point);
+        return;
+      }
       if (overResizeHandle(event)) {
         const box = addedTextBounds(selectedAddedText);
-        resizingText = { edit: selectedAddedText, fontSize: selectedAddedText.font_size,
-          start: canvasPoint(event), width: Math.max(20, box.x1 - box.x0),
-          height: Math.max(12, box.y1 - box.y0), before: edits.map((edit) => ({ ...edit })) };
+        resizingText = {
+          edit: selectedAddedText,
+          start: canvasPoint(event),
+          width: box.contentWidth,
+          height: box.contentHeight,
+          scaleX: selectedAddedText.scale_x || 1,
+          scaleY: selectedAddedText.scale_y || 1,
+          before: edits.map((edit) => ({ ...edit })),
+        };
         canvas.setPointerCapture(event.pointerId);
         canvas.style.cursor = "nwse-resize";
-        statusEl.textContent = "Drag the corner to resize this text.";
+        statusEl.textContent = "Drag horizontally to change width, vertically to change height, or diagonally to change both.";
         return;
       }
       const existing = addedTextAt(event);
@@ -472,7 +534,7 @@
       const style = currentStyle();
       if (!style) return;
       rememberEdits();
-      selectAddedText({ kind: "text", page: pageNumber, x: point.x, y: point.y, ...style });
+      selectAddedText({ kind: "text", page: pageNumber, x: point.x, y: point.y, ...style, scale_x: 1, scale_y: 1 });
       edits.push(selectedAddedText);
       canvas.focus({ preventScroll: true });
       downloadLink.style.display = "none";
@@ -483,6 +545,80 @@
     dragStart = point;
     canvas.setPointerCapture(event.pointerId);
   });
+
+  function copySelectedText() {
+    let source = null;
+    if (tool === "text" && selectedAddedText) {
+      source = selectedAddedText;
+    } else if (tool === "replace" && selectedSpan) {
+      const pending = edits.find((edit) => edit.kind === "replace" && edit.page === pageNumber && edit.span_id === selectedSpan.span_id);
+      const selectedSize = Number(fontSizeInput.value);
+      source = {
+        text: textInput.value,
+        font_size: Number.isFinite(selectedSize) && selectedSize > 0 ? selectedSize : pending?.font_size ?? selectedSpan.font_size,
+        font_name: fontInput.value || pending?.font_name || selectedSpan.font_name,
+        color: colorInput.value || pending?.color || selectedSpan.color,
+        scale_x: 1,
+        scale_y: 1,
+      };
+    }
+    if (!source || !source.text.trim()) {
+      statusEl.textContent = "There is no text to copy from this selection.";
+      return;
+    }
+    if (source.text.length > 500) {
+      statusEl.textContent = "This text is too long to copy into an added text box (500 characters maximum).";
+      return;
+    }
+    copiedText = {
+      text: source.text,
+      font_size: Math.min(72, Math.max(6, source.font_size)),
+      font_name: source.font_name,
+      color: source.color,
+      scale_x: source.scale_x || 1,
+      scale_y: source.scale_y || 1,
+    };
+    syncCopyPasteButtons();
+    statusEl.textContent = "Text copied. Click Paste copied text, then click where you want the copy placed.";
+  }
+
+  function beginPasteCopiedText() {
+    if (!copiedText) return;
+    if (pasteMode) {
+      pasteMode = false;
+      syncCopyPasteButtons();
+      statusEl.textContent = "Paste canceled.";
+      return;
+    }
+    pasteMode = true;
+    setTool("text");
+    textInput.value = copiedText.text;
+    fontSizeInput.value = String(copiedText.font_size);
+    fontInput.value = copiedText.font_name;
+    syncBoldButton();
+    colorInput.value = copiedText.color;
+    statusEl.textContent = "Click the page where you want to place the copied text.";
+  }
+
+  function pasteCopiedTextAt(point) {
+    if (!copiedText) return;
+    const pasted = {
+      kind: "text", page: pageNumber, x: point.x, y: point.y,
+      ...copiedText,
+    };
+    rememberEdits();
+    edits.push(pasted);
+    selectAddedText(pasted);
+    pasteMode = false;
+    fontSizeInput.value = String(pasted.font_size);
+    fontInput.value = pasted.font_name;
+    syncBoldButton();
+    colorInput.value = pasted.color;
+    canvas.focus({ preventScroll: true });
+    downloadLink.style.display = "none";
+    statusEl.textContent = "Copied text pasted. Drag it to move or resize it, then apply edits to save.";
+    draw();
+  }
 
   function queueSelectedPdfText(style) {
     rememberEdits();
@@ -514,11 +650,12 @@
   canvas.addEventListener("pointermove", (event) => {
     if (resizingText) {
       const position = canvasPoint(event);
-      const dx = (position.x - resizingText.start.x) / resizingText.width;
-      const dy = (position.y - resizingText.start.y) / resizingText.height;
-      const size = resizingText.fontSize * (1 + (dx + dy) / 2);
-      resizingText.edit.font_size = Math.max(6, Math.min(72, Math.round(size * 10) / 10));
-      fontSizeInput.value = String(resizingText.edit.font_size);
+      const widthRatio = Math.max(0.25, Math.min(8,
+        resizingText.scaleX * (resizingText.width + position.x - resizingText.start.x) / resizingText.width));
+      const heightRatio = Math.max(0.25, Math.min(8,
+        resizingText.scaleY * (resizingText.height + position.y - resizingText.start.y) / resizingText.height));
+      resizingText.edit.scale_x = widthRatio;
+      resizingText.edit.scale_y = heightRatio;
       draw();
       return;
     }
@@ -542,10 +679,10 @@
 
   canvas.addEventListener("pointerup", (event) => {
     if (resizingText) {
-      if (resizingText.edit.font_size !== resizingText.fontSize) {
+      if (resizingText.edit.scale_x !== resizingText.scaleX || resizingText.edit.scale_y !== resizingText.scaleY) {
         undoStack.push(resizingText.before);
         downloadLink.style.display = "none";
-        statusEl.textContent = `Text resized to ${resizingText.edit.font_size} pt. Apply edits to save it.`;
+        statusEl.textContent = "Text box resized. Apply edits to save it.";
       }
       resizingText = null;
       canvas.releasePointerCapture(event.pointerId);
@@ -583,8 +720,8 @@
   });
   canvas.addEventListener("pointercancel", () => {
     if (resizingText) {
-      resizingText.edit.font_size = resizingText.fontSize;
-      fontSizeInput.value = String(resizingText.fontSize);
+      resizingText.edit.scale_x = resizingText.scaleX;
+      resizingText.edit.scale_y = resizingText.scaleY;
       resizingText = null;
     }
     if (movingText) {
