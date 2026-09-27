@@ -27,6 +27,7 @@ class ArtifactStore:
         self._lock = Lock()
         self._artifacts: dict[str, Artifact] = {}
         self._batch_token_by_request: dict[str, str] = {}
+        self.purge_now()
 
     def create_request_id(self) -> str:
         return uuid.uuid4().hex
@@ -36,7 +37,7 @@ class ArtifactStore:
         request_dir = self.base_dir / request_id
         request_dir.mkdir(parents=True, exist_ok=True)
         safe_name = Path(filename).name
-        output_path = request_dir / safe_name
+        output_path = request_dir / f"{token}.pdf"
         output_path.write_bytes(payload)
 
         artifact = Artifact(
@@ -57,7 +58,7 @@ class ArtifactStore:
         token = uuid.uuid4().hex
         request_dir = self.base_dir / request_id
         request_dir.mkdir(parents=True, exist_ok=True)
-        zip_path = request_dir / "unlocked_batch.zip"
+        zip_path = request_dir / f"{token}.zip"
 
         with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for name, content in files:
@@ -97,22 +98,27 @@ class ArtifactStore:
 
     def _purge_expired_locked(self) -> None:
         now = time.time()
-        expired_tokens = [token for token, artifact in self._artifacts.items() if artifact.expires_at < now]
-        if not expired_tokens:
-            return
-
-        expired_requests = {self._artifacts[token].request_id for token in expired_tokens}
+        expired_tokens = [token for token, artifact in self._artifacts.items() if artifact.expires_at <= now]
         for token in expired_tokens:
-            self._artifacts.pop(token, None)
+            artifact = self._artifacts.pop(token)
+            artifact.path.unlink(missing_ok=True)
+            if self._batch_token_by_request.get(artifact.request_id) == token:
+                self._batch_token_by_request.pop(artifact.request_id, None)
 
-        for request_id in list(expired_requests):
-            self._batch_token_by_request.pop(request_id, None)
-            request_dir = self.base_dir / request_id
-            if request_dir.exists():
-                for path in request_dir.glob("*"):
-                    if path.is_file():
-                        path.unlink(missing_ok=True)
-                request_dir.rmdir()
+        active_requests = {artifact.request_id for artifact in self._artifacts.values()}
+        for request_dir in self.base_dir.iterdir():
+            if not request_dir.is_dir() or request_dir.name in active_requests:
+                continue
+            if len(request_dir.name) != 32 or any(c not in "0123456789abcdef" for c in request_dir.name):
+                continue
+            paths = list(request_dir.iterdir())
+            newest_mtime = max((path.stat().st_mtime for path in paths), default=request_dir.stat().st_mtime)
+            if newest_mtime + self.ttl_seconds > now:
+                continue
+            for path in paths:
+                if path.is_file():
+                    path.unlink(missing_ok=True)
+            request_dir.rmdir()
 
     def purge_now(self) -> None:
         with self._lock:

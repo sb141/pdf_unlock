@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from app.config import settings
 from app.models import FileResult, FileStatus, Summary, UnlockResponse
@@ -17,8 +20,26 @@ from app.services.storage import ArtifactStore
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logger = logging.getLogger("pdf_unlock")
 
-app = FastAPI(title="PDF Unlock API", version="1.0.0")
 store = ArtifactStore(base_dir=settings.temp_dir, ttl_seconds=settings.download_ttl_seconds)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    async def purge_expired() -> None:
+        while True:
+            await run_in_threadpool(store.purge_now)
+            await asyncio.sleep(max(1, min(settings.download_ttl_seconds, 60)))
+
+    cleanup_task = asyncio.create_task(purge_expired())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await cleanup_task
+
+
+app = FastAPI(title="PDF Unlock API", version="1.0.0", lifespan=lifespan)
 
 
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static"), html=True), name="static")
@@ -44,6 +65,18 @@ def _unlocked_name(original_name: str) -> str:
     return f"{path.stem}_unlocked.pdf"
 
 
+async def _upload_size(upload: UploadFile, total_size: int, total_limit: int) -> tuple[int, int]:
+    """Measure an upload without loading it all into memory."""
+    file_size = 0
+    while chunk := await upload.read(1024 * 1024):
+        file_size += len(chunk)
+        total_size += len(chunk)
+        if total_size > total_limit:
+            raise HTTPException(status_code=422, detail=f"Total request size exceeded {settings.max_total_size_mb}MB")
+    await upload.seek(0)
+    return file_size, total_size
+
+
 @app.post("/api/unlock", response_model=UnlockResponse)
 async def unlock_endpoint(
     password: Annotated[str, Form(min_length=1)],
@@ -57,10 +90,18 @@ async def unlock_endpoint(
         raise HTTPException(status_code=422, detail=f"Maximum {settings.max_files} files allowed")
 
     total_size = 0
+    file_sizes: list[int] = []
+    total_limit = settings.max_total_size_mb * 1024 * 1024
+    file_limit = settings.max_file_size_mb * 1024 * 1024
+    for upload in files:
+        file_size, total_size = await _upload_size(upload, total_size, total_limit)
+        file_sizes.append(file_size)
+
     successes: list[tuple[str, bytes]] = []
     results: list[FileResult] = []
+    output_names: set[str] = set()
 
-    for upload in files:
+    for upload, file_size in zip(files, file_sizes):
         original_name = upload.filename or "uploaded.pdf"
         if not _validate_pdf_name(original_name):
             results.append(
@@ -72,11 +113,7 @@ async def unlock_endpoint(
             )
             continue
 
-        data = await upload.read()
-        file_size = len(data)
-        total_size += file_size
-
-        if file_size > settings.max_file_size_mb * 1024 * 1024:
+        if file_size > file_limit:
             results.append(
                 FileResult(
                     original_name=original_name,
@@ -86,7 +123,8 @@ async def unlock_endpoint(
             )
             continue
 
-        unlocked_bytes, error_code = unlock_pdf(data, password)
+        data = await upload.read()
+        unlocked_bytes, error_code = await run_in_threadpool(unlock_pdf, data, password)
         if unlocked_bytes is None:
             logger.warning("Failed to unlock file: %s", error_code or "internal_error")
             results.append(
@@ -99,7 +137,14 @@ async def unlock_endpoint(
             continue
 
         output_name = _unlocked_name(original_name)
-        token = store.register_pdf(request_id=request_id, filename=output_name, payload=unlocked_bytes)
+        if output_name.casefold() in output_names:
+            stem = Path(output_name).stem
+            suffix = 2
+            while f"{stem}_{suffix}.pdf".casefold() in output_names:
+                suffix += 1
+            output_name = f"{stem}_{suffix}.pdf"
+        output_names.add(output_name.casefold())
+        token = await run_in_threadpool(store.register_pdf, request_id, output_name, unlocked_bytes)
         successes.append((output_name, unlocked_bytes))
         results.append(
             FileResult(
@@ -108,9 +153,6 @@ async def unlock_endpoint(
                 download_token=token,
             )
         )
-
-    if total_size > settings.max_total_size_mb * 1024 * 1024:
-        raise HTTPException(status_code=422, detail=f"Total request size exceeded {settings.max_total_size_mb}MB")
 
     succeeded = sum(1 for result in results if result.status == FileStatus.success)
     failed = len(results) - succeeded
@@ -133,7 +175,7 @@ async def unlock_endpoint(
             "request_id": request_id,
             "results": [result.model_dump() for result in results],
         }
-        store.register_batch_zip(request_id=request_id, files=successes, report=report)
+        await run_in_threadpool(store.register_batch_zip, request_id, successes, report)
         batch_download_available = True
 
     return UnlockResponse(
