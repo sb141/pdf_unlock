@@ -32,7 +32,7 @@ class ArtifactStore:
     def create_request_id(self) -> str:
         return uuid.uuid4().hex
 
-    def register_pdf(self, request_id: str, filename: str, payload: bytes) -> str:
+    def register_pdf(self, request_id: str, filename: str, payload: bytes, ttl_seconds: int | None = None) -> str:
         token = uuid.uuid4().hex
         request_dir = self.base_dir / request_id
         request_dir.mkdir(parents=True, exist_ok=True)
@@ -45,7 +45,7 @@ class ArtifactStore:
             path=output_path,
             filename=safe_name,
             media_type="application/pdf",
-            expires_at=time.time() + self.ttl_seconds,
+            expires_at=time.time() + (ttl_seconds if ttl_seconds is not None else self.ttl_seconds),
         )
 
         with self._lock:

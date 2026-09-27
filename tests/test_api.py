@@ -12,6 +12,15 @@ from app.services.storage import ArtifactStore
 client = TestClient(app_main.app)
 
 
+def test_home_and_tool_pages_are_directly_accessible() -> None:
+    for path in ("/", "/unlock", "/edit"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert "PDF Toolkit" in response.text
+        assert 'href="/unlock"' in response.text
+        assert 'href="/edit"' in response.text
+
+
 def _make_locked_pdf(password: str = "secret", width: int = 200) -> bytes:
     writer = PdfWriter()
     writer.add_blank_page(width=width, height=200)

@@ -7,12 +7,13 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
 from app.config import settings
-from app.models import FileResult, FileStatus, Summary, UnlockResponse
+from app.models import EditRequest, EditResponse, EditSessionResponse, FileResult, FileStatus, Summary, TextSpanInfo, UnlockResponse
+from app.services.pdf_editor import PdfEditError, apply_edits, get_text_spans, prepare_pdf, render_page
 from app.services.pdf_unlocker import unlock_pdf
 from app.services.storage import ArtifactStore
 
@@ -46,6 +47,8 @@ app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")
 
 
 @app.get("/")
+@app.get("/unlock")
+@app.get("/edit")
 def root() -> FileResponse:
     return FileResponse(Path(__file__).parent / "static" / "index.html")
 
@@ -200,3 +203,74 @@ def download_batch(request_id: str) -> FileResponse:
     if artifact is None:
         raise HTTPException(status_code=404, detail="Batch download not found or expired")
     return FileResponse(path=artifact.path, filename=artifact.filename, media_type=artifact.media_type)
+
+
+@app.post("/api/edit/session", response_model=EditSessionResponse)
+async def create_edit_session(
+    file: Annotated[UploadFile, File()],
+    password: Annotated[str, Form()] = "",
+) -> EditSessionResponse:
+    filename = file.filename or "document.pdf"
+    if not _validate_pdf_name(filename):
+        raise HTTPException(status_code=422, detail="Choose a PDF file")
+
+    file_limit = settings.max_file_size_mb * 1024 * 1024
+    chunks: list[bytes] = []
+    size = 0
+    while chunk := await file.read(1024 * 1024):
+        size += len(chunk)
+        if size > file_limit:
+            raise HTTPException(status_code=422, detail=f"File exceeds {settings.max_file_size_mb}MB")
+        chunks.append(chunk)
+    try:
+        prepared, pages = await run_in_threadpool(prepare_pdf, b"".join(chunks), password)
+    except PdfEditError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    request_id = store.create_request_id()
+    source_token = await run_in_threadpool(
+        store.register_pdf, request_id, filename, prepared, ttl_seconds=settings.edit_session_ttl_seconds
+    )
+    return EditSessionResponse(request_id=request_id, source_token=source_token, pages=pages)
+
+
+@app.get("/api/edit/{request_id}/{source_token}/pages/{page_number}")
+async def preview_edit_page(request_id: str, source_token: str, page_number: int) -> Response:
+    artifact = store.get_artifact(request_id, source_token)
+    if artifact is None or artifact.media_type != "application/pdf":
+        raise HTTPException(status_code=404, detail="Editing session not found or expired")
+    try:
+        source = await run_in_threadpool(artifact.path.read_bytes)
+        png = await run_in_threadpool(render_page, source, page_number)
+    except PdfEditError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/edit/{request_id}/{source_token}/pages/{page_number}/text", response_model=list[TextSpanInfo])
+async def preview_edit_text(request_id: str, source_token: str, page_number: int) -> list[TextSpanInfo]:
+    artifact = store.get_artifact(request_id, source_token)
+    if artifact is None or artifact.media_type != "application/pdf":
+        raise HTTPException(status_code=404, detail="Editing session not found or expired")
+    try:
+        source = await run_in_threadpool(artifact.path.read_bytes)
+        return await run_in_threadpool(get_text_spans, source, page_number)
+    except PdfEditError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/edit/{request_id}/{source_token}", response_model=EditResponse)
+async def save_edits(request_id: str, source_token: str, edits: EditRequest) -> EditResponse:
+    artifact = store.get_artifact(request_id, source_token)
+    if artifact is None or artifact.media_type != "application/pdf":
+        raise HTTPException(status_code=404, detail="Editing session not found or expired")
+    if not edits.redactions and not edits.texts and not edits.replacements:
+        raise HTTPException(status_code=422, detail="Add a redaction or text before saving")
+    try:
+        source = await run_in_threadpool(artifact.path.read_bytes)
+        result = await run_in_threadpool(apply_edits, source, edits.redactions, edits.texts, edits.replacements)
+    except PdfEditError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    output_name = f"{Path(artifact.filename).stem}_edited.pdf"
+    token = await run_in_threadpool(store.register_pdf, request_id, output_name, result)
+    return EditResponse(request_id=request_id, download_token=token)

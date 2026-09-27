@@ -3,67 +3,77 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PDF Unlock</title>
+  <title>PDF Toolkit</title>
   <link rel="icon" type="image/png" href="/static/logo.png" />
   <style>
     :root {
-      --bg: #f3f6fb;
+      --bg: #f3f7f7;
       --card: #ffffff;
-      --text: #1f2937;
+      --text: #182633;
       --accent: #0f766e;
       --danger: #b91c1c;
-      --muted: #6b7280;
-      --border: #d1d5db;
+      --muted: #637383;
+      --border: #d8e2e5;
     }
 
     body {
       margin: 0;
       font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      background: radial-gradient(circle at top, #dbeafe, var(--bg));
+      background: radial-gradient(circle at 85% 5%, #d6f0ea, transparent 36%), var(--bg);
       color: var(--text);
     }
 
+    * { box-sizing: border-box; }
+    a { color: var(--accent); }
+    .site-header {
+      max-width: 1160px;
+      margin: 22px auto 0;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; font-size: 19px; font-weight: 800; }
+    .brand img { width: 46px; height: 46px; object-fit: contain; background: white; border-radius: 12px; box-shadow: 0 3px 12px rgba(15, 23, 42, .08); }
+    .site-nav { display: flex; gap: 6px; align-items: center; }
+    .site-nav a { padding: 10px 16px; border-radius: 999px; text-decoration: none; color: var(--muted); font-weight: 650; }
+    .site-nav a:hover, .site-nav a[aria-current="page"] { background: #e1f0ec; color: #075f56; }
+
     .container {
-      max-width: 900px;
-      margin: 32px auto;
-      padding: 24px;
+      max-width: 1120px;
+      min-height: 520px;
+      margin: 18px auto 32px;
+      padding: 32px;
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      border-radius: 24px;
+      box-shadow: 0 18px 45px rgba(15, 40, 43, 0.07);
     }
+
+    .view[hidden] { display: none; }
+    .hero { background: linear-gradient(120deg, #0d655d, #0b877a); border-radius: 20px; padding: 48px; color: white; position: relative; overflow: hidden; }
+    .hero::after { content: ""; width: 360px; height: 360px; border: 1px solid rgba(255,255,255,.2); border-radius: 50%; position: absolute; right: -75px; top: -110px; box-shadow: 0 0 0 65px rgba(255,255,255,.05), 0 0 0 130px rgba(255,255,255,.035); pointer-events: none; }
+    .eyebrow { margin: 0 0 12px; font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    .hero h1 { max-width: 640px; margin: 0 0 14px; font-size: clamp(34px, 5vw, 54px); line-height: 1.08; letter-spacing: -.035em; position: relative; z-index: 1; }
+    .hero p:last-child { max-width: 560px; margin: 0; color: #e0f7f1; font-size: 17px; line-height: 1.6; position: relative; z-index: 1; }
+    .tool-heading { margin: 34px 0 16px; font-size: 20px; }
+    .tool-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .tool-card { display: block; padding: 28px; border: 1px solid var(--border); border-radius: 18px; color: var(--text); text-decoration: none; transition: transform .16s, box-shadow .16s, border-color .16s; }
+    .tool-card:hover, .tool-card:focus-visible { transform: translateY(-3px); border-color: #83c8ba; box-shadow: 0 12px 25px rgba(15, 40, 43, .1); }
+    .tool-icon { width: 50px; height: 50px; display: grid; place-items: center; border-radius: 14px; background: #e4f5ef; color: #087265; margin-bottom: 22px; }
+    .tool-icon svg { width: 26px; height: 26px; }
+    .tool-card h3 { margin: 0 0 8px; font-size: 21px; }
+    .tool-card p { margin: 0 0 20px; color: var(--muted); line-height: 1.5; }
+    .tool-link { color: var(--accent); font-weight: 750; }
+    .view-heading { margin-bottom: 28px; }
+    .view-heading .eyebrow { color: var(--accent); }
+    .view-heading h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 38px); letter-spacing: -.025em; }
+    .view-heading p { margin: 0; color: var(--muted); line-height: 1.55; }
+    #unlock-view form { max-width: 740px; }
 
     h1 {
       margin: 0 0 4px 0;
-    }
-
-    .header-container {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 24px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .logo {
-      width: 64px;
-      height: 64px;
-      object-fit: contain;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
-      flex-shrink: 0;
-    }
-
-    .header-text {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .header-text p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 14px;
     }
 
     .row {
@@ -72,7 +82,7 @@
       margin-bottom: 16px;
     }
 
-    input[type="password"], input[type="text"], input[type="file"], button {
+    input[type="password"], input[type="text"], input[type="number"], input[type="file"], select, button {
       padding: 10px 12px;
       border: 1px solid var(--border);
       border-radius: 10px;
@@ -176,17 +186,92 @@
     .btn-secondary:hover {
       background: #d1d5db !important;
     }
+
+    .editor h1 { margin: 0 0 8px; }
+    .editor p { color: var(--muted); line-height: 1.5; }
+    .editor-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 14px 0; }
+    .editor-controls button[aria-pressed="true"] { background: #0b4f49; }
+    .editor-toolbar { position: sticky; top: 0; z-index: 3; background: white; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .editor-toolbar label { font-weight: 650; }
+    .editor-tools { display: flex; flex-wrap: wrap; gap: 10px; }
+    #delete-added-text[hidden] { display: none; }
+    #delete-pdf-text[hidden] { display: none; }
+    .text-options { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(4, auto); gap: 12px; align-items: end; padding: 14px; background: #f4f8f7; border: 1px solid var(--border); border-radius: 12px; }
+    .text-options[hidden] { display: none; }
+    .text-options label { display: grid; gap: 6px; font-size: 13px; }
+    .text-options input[type="text"] { width: 100%; }
+    .text-options input[type="number"] { width: 80px; }
+    .text-options input[type="color"] { width: 50px; height: 40px; padding: 3px; border: 1px solid var(--border); border-radius: 8px; background: white; cursor: pointer; }
+    .text-options select { min-width: 130px; }
+    #editor-bold { background: white; color: var(--text); min-height: 40px; }
+    #editor-bold[aria-pressed="true"] { background: #0b4f49; color: white; border-color: #0b4f49; }
+    #replace-text[hidden] { display: none; }
+    .selected-text { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+    .page-viewport { max-height: 72vh; overflow: auto; background: #e9eff0; border: 1px solid var(--border); border-radius: 14px; }
+    .page-stage { position: relative; width: fit-content; margin: 20px auto; border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(15, 23, 42, 0.12); }
+    .page-stage img { display: block; width: 100%; height: auto; max-width: none; max-height: none; }
+    .page-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+    #edit-download { display: none; }
+    @media (max-width: 700px) {
+      .site-header { margin: 12px auto; flex-wrap: wrap; }
+      .site-nav { width: 100%; justify-content: space-between; }
+      .site-nav a { padding: 8px 12px; }
+      .container { margin: 0; padding: 18px; border-radius: 0; min-height: calc(100vh - 130px); }
+      .hero { padding: 32px 24px; }
+      .tool-grid { grid-template-columns: 1fr; }
+      .editor-controls { align-items: stretch; }
+      .text-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .text-options label:first-child { grid-column: 1 / -1; }
+      .editor-tools button { flex: 1; }
+    }
   </style>
 </head>
 <body>
+  <header class="site-header">
+    <a class="brand" href="/" data-route>
+      <img src="/static/logo.png" alt="" />
+      <span>PDF Toolkit</span>
+    </a>
+    <nav class="site-nav" aria-label="Main navigation">
+      <a href="/" data-route>Home</a>
+      <a href="/unlock" data-route>Unlock</a>
+      <a href="/edit" data-route>Edit &amp; redact</a>
+    </nav>
+  </header>
   <main class="container">
-    <div class="header-container">
-      <img src="/static/logo.png" alt="PDF Unlock Logo" class="logo" />
-      <div class="header-text">
-        <h1>PDF Unlock</h1>
-        <p>Upload locked PDFs and provide the password to generate unlocked copies.</p>
+    <section id="home-view" class="view" hidden>
+      <div class="hero">
+        <p class="eyebrow">Your PDF workspace</p>
+        <h1>Work with your PDFs in a few simple steps.</h1>
+        <p>Unlock protected files, add text, and redact sensitive details from one place.</p>
       </div>
-    </div>
+      <h2 class="tool-heading">Choose a tool</h2>
+      <div class="tool-grid">
+        <a class="tool-card" href="/unlock" data-route>
+          <span class="tool-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.7-1.5"/><path d="M12 14v3"/></svg>
+          </span>
+          <h3>Unlock PDFs</h3>
+          <p>Remove password protection from one file or a batch using the password you have.</p>
+          <span class="tool-link">Open unlock tool &rarr;</span>
+        </a>
+        <a class="tool-card" href="/edit" data-route>
+          <span class="tool-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h8l4 4v13a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5"/><path d="M8 15h8M8 18h5"/><path d="m9 11 2 2 4-4"/></svg>
+          </span>
+          <h3>Edit &amp; redact</h3>
+          <p>Add or replace selectable text, or permanently remove page content from selected areas.</p>
+          <span class="tool-link">Open editor &rarr;</span>
+        </a>
+      </div>
+    </section>
+
+    <section id="unlock-view" class="view" hidden>
+      <div class="view-heading">
+        <p class="eyebrow">Unlock tool</p>
+        <h1>Unlock your PDFs</h1>
+        <p>Upload locked PDFs and enter their password to create unlocked copies.</p>
+      </div>
 
     <form id="unlock-form">
       <div class="row">
@@ -222,13 +307,126 @@
           <th>Status</th>
           <th>Error</th>
           <th>Download</th>
+          <th>Edit</th>
         </tr>
       </thead>
       <tbody id="results-body"></tbody>
     </table>
+    </section>
+
+    <section class="view editor" id="editor-section" hidden>
+      <div class="view-heading">
+        <p class="eyebrow">PDF editor</p>
+        <h1>Edit and redact a PDF</h1>
+        <p>Zoom in to select details, add and resize text, replace or delete selectable text, or redact an area.</p>
+      </div>
+      <form id="editor-open-form" class="row">
+        <label for="editor-file">PDF to edit</label>
+        <input id="editor-file" type="file" accept="application/pdf,.pdf" required />
+        <label for="editor-password">Password, if the PDF is locked</label>
+        <input id="editor-password" type="password" autocomplete="off" />
+        <button type="submit">Open PDF</button>
+      </form>
+      <div class="error" id="editor-error" role="alert"></div>
+      <div class="status" id="editor-status" aria-live="polite"></div>
+      <div id="editor-workspace" hidden>
+        <div class="editor-toolbar">
+          <div class="editor-controls">
+            <button type="button" id="page-prev" class="btn-secondary">Previous page</button>
+            <span id="page-label"></span>
+            <button type="button" id="page-next" class="btn-secondary">Next page</button>
+            <label for="editor-zoom">Zoom</label>
+            <select id="editor-zoom" aria-label="Page zoom">
+              <option value="fit">Fit width</option>
+              <option value="0.75">75%</option>
+              <option value="1" selected>100%</option>
+              <option value="1.25">125%</option>
+              <option value="1.5">150%</option>
+              <option value="2">200%</option>
+            </select>
+          </div>
+          <div class="editor-controls editor-tools">
+            <button type="button" id="tool-redact" aria-pressed="true">Redact area</button>
+            <button type="button" id="tool-text" aria-pressed="false">Add text</button>
+            <button type="button" id="tool-replace" aria-pressed="false">Edit text</button>
+            <button type="button" id="delete-added-text" class="btn-secondary" hidden>Delete added text</button>
+          </div>
+          <div id="text-options" class="text-options" hidden>
+            <label for="editor-text"><span id="editor-text-label">Text to add</span>
+              <input id="editor-text" type="text" maxlength="500" placeholder="Enter text" />
+            </label>
+            <label for="editor-font-size">Size
+              <input id="editor-font-size" type="number" min="6" max="72" value="12" />
+            </label>
+            <label for="editor-font">Font
+              <select id="editor-font">
+                <option value="helv">Helvetica</option><option value="hebo">Helvetica Bold</option>
+                <option value="heit">Helvetica Italic</option><option value="hebi">Helvetica Bold Italic</option>
+                <option value="tiro">Times</option><option value="tibo">Times Bold</option>
+                <option value="tiit">Times Italic</option><option value="tibi">Times Bold Italic</option>
+                <option value="cour">Courier</option><option value="cobo">Courier Bold</option>
+                <option value="coit">Courier Italic</option><option value="cobi">Courier Bold Italic</option>
+              </select>
+            </label>
+            <button type="button" id="editor-bold" aria-label="Bold text" aria-pressed="false">Bold</button>
+            <label for="editor-color">Color
+              <input id="editor-color" type="color" value="#000000" />
+            </label>
+            <button type="button" id="replace-text" hidden>Replace selected text</button>
+            <button type="button" id="delete-pdf-text" class="btn-secondary" hidden>Delete selected PDF text</button>
+            <p class="selected-text" id="selected-text" hidden></p>
+          </div>
+        </div>
+        <div class="page-viewport" id="page-viewport">
+          <div class="page-stage" id="page-stage">
+            <img id="editor-page-image" alt="PDF page preview" />
+            <canvas id="editor-overlay" tabindex="0" aria-label="Select an area to redact, add and resize text, or select existing text. Press Delete to remove selected text."></canvas>
+          </div>
+        </div>
+        <div class="editor-controls">
+          <button type="button" id="edit-undo" class="btn-secondary">Undo last edit</button>
+          <button type="button" id="edit-clear-page" class="btn-secondary">Clear this page</button>
+          <button type="button" id="edit-save">Apply edits and download</button>
+          <a id="edit-download" href="#">Download edited PDF</a>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script>
+    const views = {
+      "/": document.getElementById("home-view"),
+      "/unlock": document.getElementById("unlock-view"),
+      "/edit": document.getElementById("editor-section"),
+    };
+
+    function renderRoute() {
+      const path = views[window.location.pathname] ? window.location.pathname : "/";
+      Object.entries(views).forEach(([route, view]) => { view.hidden = route !== path; });
+      document.querySelectorAll(".site-nav a[data-route]").forEach((link) => {
+        if (link.getAttribute("href") === path) link.setAttribute("aria-current", "page");
+        else link.removeAttribute("aria-current");
+      });
+      document.title = path === "/" ? "PDF Toolkit" : `${path === "/unlock" ? "Unlock PDFs" : "Edit & redact"} | PDF Toolkit`;
+    }
+
+    window.navigateTo = (path) => {
+      if (!views[path]) return;
+      if (window.location.pathname !== path) window.history.pushState({}, "", path);
+      renderRoute();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    document.querySelectorAll("a[data-route]").forEach((link) => {
+      link.addEventListener("click", (event) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        window.navigateTo(link.getAttribute("href"));
+      });
+    });
+    window.addEventListener("popstate", renderRoute);
+    renderRoute();
+
     const form = document.getElementById("unlock-form");
     const statusEl = document.getElementById("status");
     const errorEl = document.getElementById("error");
@@ -306,16 +504,31 @@
 
         payload.results.forEach((result) => {
           const row = document.createElement("tr");
-          const downloadCell = result.download_token
-            ? `<a href="/api/download/${payload.request_id}/${result.download_token}">Download</a>`
-            : "-";
-
-          row.innerHTML = `
-            <td>${result.original_name}</td>
-            <td><span class="pill ${result.status}">${result.status}</span></td>
-            <td>${result.error_code || "-"}</td>
-            <td>${downloadCell}</td>
-          `;
+          const nameCell = row.insertCell();
+          nameCell.textContent = result.original_name;
+          const statusCell = row.insertCell();
+          const pill = document.createElement("span");
+          pill.className = `pill ${result.status}`;
+          pill.textContent = result.status;
+          statusCell.appendChild(pill);
+          row.insertCell().textContent = result.error_code || "-";
+          const downloadCell = row.insertCell();
+          const editCell = row.insertCell();
+          if (result.download_token) {
+            const url = `/api/download/${payload.request_id}/${result.download_token}`;
+            const link = document.createElement("a");
+            link.href = url;
+            link.textContent = "Download";
+            downloadCell.appendChild(link);
+            const editButton = document.createElement("button");
+            editButton.type = "button";
+            editButton.textContent = "Edit";
+            editButton.addEventListener("click", () => window.openPdfEditor(url, result.original_name));
+            editCell.appendChild(editButton);
+          } else {
+            downloadCell.textContent = "-";
+            editCell.textContent = "-";
+          }
           resultsBody.appendChild(row);
         });
 
@@ -334,5 +547,6 @@
       }
     });
   </script>
+  <script src="/static/editor.js"></script>
 </body>
 </html>
