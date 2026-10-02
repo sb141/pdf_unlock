@@ -116,9 +116,7 @@ def apply_edits(
         if any(edit.page >= page_count for edit in [*redactions, *texts, *replacements]):
             raise PdfEditError("Page not found")
 
-        for edit in redactions:
-            page = document[edit.page]
-            page.add_redact_annot(_rect_on_page(page, edit), fill=(0, 0, 0))
+        redaction_rects = [(edit.page, _rect_on_page(document[edit.page], edit)) for edit in redactions]
 
         replacement_spans: list[tuple[TextReplacement, dict]] = []
         spans_by_page: dict[int, list[dict]] = {}
@@ -145,11 +143,12 @@ def apply_edits(
             )
 
         for edit in texts:
-            point = _point_on_page(document[edit.page], edit)
+            page = document[edit.page]
+            point = _point_on_page(page, edit)
             try:
-                document[edit.page].insert_text(
+                page.insert_text(
                     point, edit.text, fontsize=edit.font_size, fontname=edit.font_name, color=_rgb(edit.color),
-                    morph=(point, pymupdf.Matrix(edit.scale_x, 0, 0, edit.scale_y, 0, 0)),
+                    morph=(point, pymupdf.Matrix(edit.scale_x, edit.scale_y) * pymupdf.Matrix(page.rotation)),
                 )
             except Exception as exc:
                 raise PdfEditError("Could not add text at this position") from exc
@@ -163,8 +162,18 @@ def apply_edits(
                     fontsize=edit.font_size or span["font_size"],
                     fontname=edit.font_name or span["font_name"],
                     color=_rgb(edit.color or span["color"]),
+                    rotate=document[edit.page].rotation,
                 )
             except Exception as exc:
                 raise PdfEditError("Could not replace the selected text") from exc
+
+        for page_number, rectangle in redaction_rects:
+            document[page_number].add_redact_annot(rectangle, fill=(0, 0, 0))
+        for page_number in {page_number for page_number, _ in redaction_rects}:
+            document[page_number].apply_redactions(
+                images=pymupdf.PDF_REDACT_IMAGE_PIXELS,
+                graphics=pymupdf.PDF_REDACT_LINE_ART_REMOVE_IF_COVERED,
+                text=pymupdf.PDF_REDACT_TEXT_REMOVE,
+            )
 
         return document.tobytes(garbage=4, deflate=True, clean=True, encryption=pymupdf.PDF_ENCRYPT_NONE)

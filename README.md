@@ -9,6 +9,7 @@ A web app for unlocking password-protected PDFs and editing their pages. The hom
 - Add text, then move it, resize its width and height separately, recolor it, change its font, or delete it before saving.
 - Replace or delete selectable PDF text.
 - Redact a selected area and download a new PDF with the page content in that area removed.
+- Unlock AES-encrypted PDFs while preserving bookmarks and document metadata.
 
 ## Run locally
 
@@ -64,6 +65,7 @@ The source PDF remains unchanged. Editing works on up to 200 pages per PDF. Edit
 - **Edit text** works on selectable PDF text. Scanned pages have no selectable text; use redaction and added text for those pages.
 - Replacing or deleting a text run fills its old area white. Replacement fonts are approximated with standard PDF fonts. Review the downloaded file when the original uses a complex font or a colored background.
 - Area redaction removes page content in the selected rectangle. It does not remove matching text from metadata, attachments, or other parts of the document. Review the downloaded PDF before sharing it.
+- Area redactions take precedence over added or replacement text that overlaps them in the saved PDF.
 
 ## Configuration
 

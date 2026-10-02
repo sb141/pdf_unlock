@@ -1,13 +1,83 @@
 from pathlib import Path
 
 import pymupdf
+import pytest
 from fastapi.testclient import TestClient
 
 import app.main as app_main
 from app.services.storage import ArtifactStore
+from app.models import AddedText, Redaction, TextReplacement
+from app.services.pdf_editor import apply_edits, get_text_spans
 
 
 client = TestClient(app_main.app)
+
+
+@pytest.mark.parametrize("rotation", [0, 90, 180, 270])
+@pytest.mark.parametrize("scales", [(1, 1), (2, 0.5)])
+def test_added_text_matches_visible_page_orientation(rotation: int, scales: tuple[float, float]) -> None:
+    with pymupdf.open() as document:
+        document.new_page(width=400, height=400).set_rotation(rotation)
+        source = document.tobytes()
+    scale_x, scale_y = scales
+    edited = apply_edits(source, [], [AddedText(
+        page=0, x=100, y=150, text="ADDED", font_size=18, scale_x=scale_x, scale_y=scale_y,
+    )])
+    with pymupdf.open(stream=edited, filetype="pdf") as document:
+        page = document[0]
+        assert page.rotation == rotation
+        line = next(line for block in page.get_text("dict")["blocks"] if block.get("type") == 0
+                    for line in block["lines"])
+        direction = pymupdf.Point(line["dir"]) * pymupdf.Matrix(rotation)
+        assert (direction.x, direction.y) == pytest.approx((1, 0), abs=0.001)
+        span = line["spans"][0]
+        assert span["text"] == "ADDED"
+        origin = pymupdf.Point(span["origin"]) * page.rotation_matrix
+        assert (origin.x, origin.y) == pytest.approx((100, 150), abs=0.001)
+        bounds = pymupdf.Rect(span["bbox"]) * page.rotation_matrix
+        assert bounds.width == pytest.approx(pymupdf.get_text_length("ADDED", fontsize=18) * scale_x, abs=0.01)
+        assert bounds.height == pytest.approx(18 * (1.075 + 0.299) * scale_y, abs=0.01)
+
+
+@pytest.mark.parametrize("rotation", [0, 90, 180, 270])
+def test_replacement_text_matches_visible_page_orientation(rotation: int) -> None:
+    with pymupdf.open() as document:
+        page = document.new_page(width=400, height=400)
+        page.set_rotation(rotation)
+        point = pymupdf.Point(100, 150) * page.derotation_matrix
+        page.insert_text(point, "ORIGINAL", fontsize=18, rotate=rotation)
+        source = document.tobytes()
+    edited = apply_edits(source, [], [], [TextReplacement(page=0, span_id=0, text="UPDATED")])
+    with pymupdf.open(stream=edited, filetype="pdf") as document:
+        page = document[0]
+        line = next(line for block in page.get_text("dict")["blocks"] if block.get("type") == 0
+                    for line in block["lines"])
+        direction = pymupdf.Point(line["dir"]) * pymupdf.Matrix(rotation)
+        assert (direction.x, direction.y) == pytest.approx((1, 0), abs=0.001)
+        assert line["spans"][0]["text"] == "UPDATED"
+        origin = pymupdf.Point(line["spans"][0]["origin"]) * page.rotation_matrix
+        assert (origin.x, origin.y) == pytest.approx((100, 150), abs=0.001)
+
+
+@pytest.mark.parametrize("rotation", [0, 90, 180, 270])
+def test_redaction_takes_precedence_over_replacements_and_added_text(rotation: int) -> None:
+    with pymupdf.open() as document:
+        page = document.new_page(width=400, height=400)
+        page.set_rotation(rotation)
+        page.insert_text(pymupdf.Point(40, 80) * page.derotation_matrix, "SECRET", fontsize=18, rotate=rotation)
+        page.insert_text(pymupdf.Point(40, 180) * page.derotation_matrix, "PUBLIC", fontsize=18, rotate=rotation)
+        source = document.tobytes()
+    secret = next(span for span in get_text_spans(source, 0) if span["text"] == "SECRET")
+    edited = apply_edits(source, [Redaction(page=0, x0=35, y0=50, x1=170, y1=110)],
+                         [AddedText(page=0, x=40, y=100, text="ADDED", font_size=18)],
+                         [TextReplacement(page=0, span_id=secret["span_id"], text="SECRET")])
+    with pymupdf.open(stream=edited, filetype="pdf") as document:
+        text = document[0].get_text()
+        assert "SECRET" not in text
+        assert "ADDED" not in text
+        assert "PUBLIC" in text
+        pixmap = document[0].get_pixmap()
+        assert pixmap.pixel(60, 80) == (0, 0, 0)
 
 
 def _pdf_with_secret() -> tuple[bytes, list[float]]:

@@ -2,6 +2,7 @@ import logging
 from io import BytesIO
 
 from pypdf import PdfReader, PdfWriter
+from pypdf.errors import DependencyError
 
 logger = logging.getLogger("pdf_unlock")
 
@@ -10,6 +11,9 @@ def unlock_pdf(input_bytes: bytes, password: str) -> tuple[bytes | None, str | N
     """Return unlocked bytes or an error code."""
     try:
         reader = PdfReader(BytesIO(input_bytes))
+    except (DependencyError, NotImplementedError):
+        logger.exception("Unsupported PDF encryption")
+        return None, "wrong_password_or_unsupported_encryption"
     except Exception as e:
         logger.exception("Failed to parse PDF bytes")
         return None, "invalid_pdf"
@@ -30,10 +34,9 @@ def unlock_pdf(input_bytes: bytes, password: str) -> tuple[bytes | None, str | N
 
     writer = PdfWriter()
     try:
-        for page in reader.pages:
-            writer.add_page(page)
+        writer.clone_document_from_reader(reader)
     except Exception as e:
-        logger.exception("Exception adding pages to writer")
+        logger.exception("Exception cloning document to writer")
         return None, "decrypt_failed"
 
     output = BytesIO()
