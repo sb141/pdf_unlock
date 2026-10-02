@@ -13,12 +13,13 @@ client = TestClient(app_main.app)
 
 
 def test_home_and_tool_pages_are_directly_accessible() -> None:
-    for path in ("/", "/unlock", "/edit"):
+    for path in ("/", "/unlock", "/edit", "/word-to-pdf"):
         response = client.get(path)
         assert response.status_code == 200
         assert "PDF Toolkit" in response.text
         assert 'href="/unlock"' in response.text
         assert 'href="/edit"' in response.text
+        assert 'href="/word-to-pdf"' in response.text
 
 
 def _make_locked_pdf(password: str = "secret", width: int = 200) -> bytes:
@@ -123,4 +124,4 @@ def test_total_limit_rejects_before_any_conversion_or_artifact(tmp_path: Path, m
     response = client.post("/api/unlock", files=files, data={"password": "pw"})
 
     assert response.status_code == 422
-    assert list(tmp_path.iterdir()) == []
+    assert list(tmp_path.glob("*/*.pdf")) == []

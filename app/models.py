@@ -95,3 +95,9 @@ class EditRequest(BaseModel):
 class EditResponse(BaseModel):
     request_id: str
     download_token: str
+
+
+class ConversionResponse(BaseModel):
+    request_id: str
+    download_token: str
+    filename: str

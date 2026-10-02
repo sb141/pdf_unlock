@@ -54,12 +54,13 @@ def _standard_font_name(name: str) -> str:
 
 def _text_spans(page: pymupdf.Page) -> list[dict]:
     spans = []
-    for block in page.get_text("dict")["blocks"]:
+    for block in page.get_text("rawdict")["blocks"]:
         if block.get("type") != 0:
             continue
         for line in block["lines"]:
             for span in line["spans"]:
-                if not span["text"].strip():
+                text = "".join(char["c"] for char in span["chars"])
+                if not text.strip():
                     continue
                 rect = pymupdf.Rect(span["bbox"])
                 if rect.is_empty:
@@ -68,7 +69,7 @@ def _text_spans(page: pymupdf.Page) -> list[dict]:
                 origin = pymupdf.Point(span["origin"]) * page.rotation_matrix
                 spans.append({
                     "span_id": len(spans),
-                    "text": span["text"],
+                    "text": text,
                     "x0": visible.x0, "y0": visible.y0,
                     "x1": visible.x1, "y1": visible.y1,
                     "origin_x": origin.x, "origin_y": origin.y,
@@ -77,6 +78,8 @@ def _text_spans(page: pymupdf.Page) -> list[dict]:
                     "color": f"#{span['color'] & 0xffffff:06x}",
                     "_rect": rect,
                     "_origin": pymupdf.Point(span["origin"]),
+                    "_direction": line["dir"],
+                    "_chars": span["chars"],
                 })
     return spans
 
@@ -91,6 +94,35 @@ def get_text_spans(data: bytes, page_number: int) -> list[dict]:
 
 def _rgb(color: str) -> tuple[float, float, float]:
     return tuple(int(color[index:index + 2], 16) / 255 for index in (1, 3, 5))
+
+
+def _replacement_rects(span: dict, spans: list[dict], selected: set[int]) -> list[pymupdf.Rect]:
+    """Find a small hit area for each glyph without touching unselected glyphs."""
+    obstacles = [pymupdf.Rect(char["bbox"]) for other in spans
+                 if other["span_id"] not in selected and other["_rect"].intersects(span["_rect"])
+                 for char in other["_chars"]]
+    rectangles = []
+    for char in span["_chars"]:
+        box = pymupdf.Rect(char["bbox"])
+        pieces = [box + (0.01, 0.01, -0.01, -0.01)]
+        for obstacle in obstacles:
+            remaining = []
+            for piece in pieces:
+                overlap = piece & (obstacle + (-0.01, -0.01, 0.01, 0.01))
+                if overlap.is_empty:
+                    remaining.append(piece)
+                    continue
+                remaining.extend([
+                    pymupdf.Rect(piece.x0, piece.y0, piece.x1, overlap.y0),
+                    pymupdf.Rect(piece.x0, overlap.y1, piece.x1, piece.y1),
+                    pymupdf.Rect(piece.x0, overlap.y0, overlap.x0, overlap.y1),
+                    pymupdf.Rect(overlap.x1, overlap.y0, piece.x1, overlap.y1),
+                ])
+            pieces = [piece for piece in remaining if piece.width > 0.02 and piece.height > 0.02]
+        if not pieces:
+            raise PdfEditError("Selected text overlaps other text and cannot be safely replaced")
+        rectangles.append(max(pieces, key=lambda piece: piece.get_area()))
+    return rectangles
 
 
 def _rect_on_page(page: pymupdf.Page, edit: Redaction) -> pymupdf.Rect:
@@ -132,13 +164,17 @@ def apply_edits(
             if edit.span_id >= len(spans):
                 raise PdfEditError("Selected text was not found")
             span = spans[edit.span_id]
-            page.add_redact_annot(span["_rect"], fill=(1, 1, 1))
             replacement_spans.append((edit, span))
 
-        for page in document:
+        for edit, span in replacement_spans:
+            selected = {span_id for page_number, span_id in used_spans if page_number == edit.page}
+            for rectangle in _replacement_rects(span, spans_by_page[edit.page], selected):
+                document[edit.page].add_redact_annot(rectangle, fill=False)
+        for page_number in spans_by_page:
+            page = document[page_number]
             page.apply_redactions(
-                images=pymupdf.PDF_REDACT_IMAGE_PIXELS,
-                graphics=pymupdf.PDF_REDACT_LINE_ART_REMOVE_IF_COVERED,
+                images=pymupdf.PDF_REDACT_IMAGE_NONE,
+                graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,
                 text=pymupdf.PDF_REDACT_TEXT_REMOVE,
             )
 
@@ -162,7 +198,10 @@ def apply_edits(
                     fontsize=edit.font_size or span["font_size"],
                     fontname=edit.font_name or span["font_name"],
                     color=_rgb(edit.color or span["color"]),
-                    rotate=document[edit.page].rotation,
+                    morph=(span["_origin"], pymupdf.Matrix(
+                        span["_direction"][0], -span["_direction"][1],
+                        span["_direction"][1], span["_direction"][0], 0, 0,
+                    )),
                 )
             except Exception as exc:
                 raise PdfEditError("Could not replace the selected text") from exc

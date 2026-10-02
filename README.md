@@ -1,10 +1,11 @@
 # PDF Toolkit
 
-A web app for unlocking password-protected PDFs and editing their pages. The home page links to **Unlock PDFs** and **Edit & redact**.
+A web app for converting Word documents, unlocking password-protected PDFs, and editing their pages. The home page links to **Word to PDF**, **Unlock PDFs**, and **Edit & redact**.
 
 ## Features
 
 - Unlock one PDF or a batch with the correct password. View the result for each file and download successful files individually or as a ZIP.
+- Convert `.doc` and `.docx` documents to PDF, then download or open the result in the editor.
 - Zoom and scroll through PDF pages while editing.
 - Add text, then move it, resize its width and height separately, recolor it, change its font, or delete it before saving.
 - Replace or delete selectable PDF text.
@@ -40,7 +41,15 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Open `http://127.0.0.1:8000`. The tools are also available directly at `/unlock` and `/edit`.
+Open `http://127.0.0.1:8000`. The tools are also available directly at `/unlock`, `/edit`, and `/word-to-pdf`.
+
+## Word to PDF
+
+Open **Word to PDF**, select one `.doc` or `.docx` document, and click **Convert to PDF**. Download the result or click **Edit PDF**. The default input limit is 25 MB; generated downloads expire after five minutes. Password-protected documents must be unlocked in Word before uploading.
+
+Word conversion requires LibreOffice on the server. The Docker image includes LibreOffice Writer and common fonts. For local use, install LibreOffice; Windows and macOS standard installation paths are detected automatically. On Linux, install `libreoffice-writer` with your package manager. Set `LIBREOFFICE_PATH` to the full path of `soffice` (or `soffice.com` on Windows) for a custom installation.
+
+Each conversion uses a private profile and temporary directory, disables macros and linked-content updates, and stops after 90 seconds by default. Temporary source files are deleted when the conversion finishes or fails. DOCX packages and output PDFs are limited to `MAX_TOTAL_SIZE_MB`. Review the result before sharing: missing fonts and complex Word layouts can change pagination or spacing. Install your document's fonts on the server when layout fidelity matters.
 
 ## Unlock PDFs
 
@@ -63,13 +72,15 @@ The source PDF remains unchanged. Editing works on up to 200 pages per PDF. Edit
 ### Editing limits
 
 - **Edit text** works on selectable PDF text. Scanned pages have no selectable text; use redaction and added text for those pages.
-- Replacing or deleting a text run fills its old area white. Replacement fonts are approximated with standard PDF fonts. Review the downloaded file when the original uses a complex font or a colored background.
+- Replacing or deleting a text run removes its glyphs while preserving neighboring text and background graphics. Overlapping text that cannot be safely isolated is rejected. Replacement fonts are approximated with standard PDF fonts. Review the downloaded file when the original uses a complex font.
 - Area redaction removes page content in the selected rectangle. It does not remove matching text from metadata, attachments, or other parts of the document. Review the downloaded PDF before sharing it.
 - Area redactions take precedence over added or replacement text that overlaps them in the saved PDF.
 
 ## Configuration
 
 Copy `.env.example` to `.env` to change these defaults:
+
+Uploads are bounded while streaming, before multipart buffering. The raw request limit allows an additional 1 MB for form fields and multipart headers; the PDF byte limits below are checked separately. Temporary artifact metadata is stored in SQLite under `TEMP_DIR`, allowing multiple workers on the same host to share downloads and session expiry times. Use a local filesystem for this directory.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -80,12 +91,15 @@ Copy `.env.example` to `.env` to change these defaults:
 | `DOWNLOAD_TTL_SECONDS` | `300` | Lifetime of generated downloads |
 | `EDIT_SESSION_TTL_SECONDS` | `3600` | Lifetime of an editing session |
 | `LOG_LEVEL` | `INFO` | Application log level |
+| `LIBREOFFICE_PATH` | Auto-detect | Full path to the LibreOffice executable |
+| `CONVERSION_TIMEOUT_SECONDS` | `90` | Maximum duration of a Word conversion (1 to 600 seconds) |
 
 ## API
 
 | Endpoint | Purpose |
 | --- | --- |
 | `POST /api/unlock` | Unlock one or more uploaded PDFs |
+| `POST /api/convert/word` | Convert an uploaded `.doc` or `.docx` document to PDF |
 | `GET /api/download/{request_id}/{download_token}` | Download an unlocked or edited PDF |
 | `GET /api/download-batch/{request_id}` | Download a batch ZIP |
 | `POST /api/edit/session` | Open a PDF for editing |

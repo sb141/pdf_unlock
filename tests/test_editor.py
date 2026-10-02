@@ -13,6 +13,50 @@ from app.services.pdf_editor import apply_edits, get_text_spans
 client = TestClient(app_main.app)
 
 
+@pytest.mark.parametrize("replacement", ["UPDATED", ""])
+def test_replacement_preserves_overlapping_neighbor_line(replacement: str) -> None:
+    with pymupdf.open() as document:
+        page = document.new_page()
+        page.insert_text((40, 80), "TOP", fontsize=18)
+        page.insert_text((40, 98), "BOTTOM", fontsize=18)
+        source = document.tobytes()
+    edited = apply_edits(source, [], [], [TextReplacement(page=0, span_id=0, text=replacement)])
+    with pymupdf.open(stream=edited, filetype="pdf") as document:
+        text = document[0].get_text()
+        assert "TOP" not in text
+        assert "BOTTOM" in text
+        if replacement:
+            assert replacement in text
+
+
+@pytest.mark.parametrize("page_rotation", [0, 90, 180, 270])
+@pytest.mark.parametrize("text_rotation", [0, 90, 180, 270])
+def test_replacement_preserves_original_direction(page_rotation: int, text_rotation: int) -> None:
+    with pymupdf.open() as document:
+        page = document.new_page(width=500, height=500)
+        page.insert_text((250, 250), "ORIGINAL", fontsize=18, rotate=text_rotation)
+        page.set_rotation(page_rotation)
+        source = document.tobytes()
+        original = page.get_text("dict")["blocks"][0]["lines"][0]
+    edited = apply_edits(source, [], [], [TextReplacement(page=0, span_id=0, text="UPDATED")])
+    with pymupdf.open(stream=edited, filetype="pdf") as document:
+        line = document[0].get_text("dict")["blocks"][0]["lines"][0]
+        assert line["dir"] == pytest.approx(original["dir"])
+        assert line["spans"][0]["origin"] == pytest.approx(original["spans"][0]["origin"])
+        assert line["spans"][0]["text"] == "UPDATED"
+
+
+def test_replacement_rejects_fully_overlapping_unselected_text() -> None:
+    with pymupdf.open() as document:
+        page = document.new_page()
+        page.insert_text((40, 80), "FIRST", fontsize=18)
+        page.insert_text((40, 80), "SECOND", fontsize=18)
+        source = document.tobytes()
+    from app.services.pdf_editor import PdfEditError
+    with pytest.raises(PdfEditError, match="overlaps other text"):
+        apply_edits(source, [], [], [TextReplacement(page=0, span_id=0, text="UPDATED")])
+
+
 @pytest.mark.parametrize("rotation", [0, 90, 180, 270])
 @pytest.mark.parametrize("scales", [(1, 1), (2, 0.5)])
 def test_added_text_matches_visible_page_orientation(rotation: int, scales: tuple[float, float]) -> None:
