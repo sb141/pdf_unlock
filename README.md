@@ -65,7 +65,7 @@ Open **Edit & redact** and choose a PDF. If it is locked, enter its password. Yo
 2. Choose **Redact area** and drag a rectangle over the content to remove. The saved area is filled black.
 3. Choose **Add text**, enter the text and its size, font, and color, and use **Bold** if needed. Click the page to place it. Click placed text to select it. Drag it to move it. Drag its corner horizontally to change width, vertically to change height, or diagonally to change both. You can also change its size, font, color, or bold setting, or click **Delete added text**.
 4. Choose **Edit text** and click a highlighted text run. Enter new text or change its style, including **Bold**, then click **Replace selected text**. To duplicate the text elsewhere, click **Copy selected text**, then **Paste copied text**, and click the destination on the page. The original stays in place. Click **Delete selected PDF text** to remove it without a replacement.
-5. Use **Undo last edit** or **Clear this page** to revise pending changes. Press Delete or Backspace while the page is focused to remove selected text. Click **Apply edits and download** to create and download the edited PDF.
+5. Use **Undo last edit** or **Clear this page** to revise pending changes. Press Delete or Backspace while the page is focused to remove selected text. Click **Apply edits and preview** to review the saved PDF, browse its pages, and download it from the preview. Choose **Back to editing** to continue revising. **Apply edits and download** remains available without opening a preview.
 
 The source PDF remains unchanged. Editing works on up to 200 pages per PDF. Edit sessions expire after one hour by default; generated downloads expire after five minutes by default.
 

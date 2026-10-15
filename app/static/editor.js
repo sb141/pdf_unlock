@@ -35,6 +35,56 @@
   const clearButton = document.getElementById("edit-clear-page");
   const saveButton = document.getElementById("edit-save");
   const downloadLink = document.getElementById("edit-download");
+  const previewButton = document.getElementById("edit-preview");
+  const previewDialog = document.getElementById("edited-preview");
+  const previewImage = document.getElementById("edited-preview-image");
+  const previewPageLabel = document.getElementById("edited-preview-page");
+  const previewPrevButton = document.getElementById("edited-preview-prev");
+  const previewNextButton = document.getElementById("edited-preview-next");
+  const previewError = document.getElementById("edited-preview-error");
+  const previewDownload = document.getElementById("edited-preview-download");
+
+  let previewResult = null;
+  let previewPage = 0;
+  let previewPageCount = 0;
+  let previewLoadId = 0;
+
+  async function loadEditedPreview() {
+    const loadId = ++previewLoadId;
+    const currentPage = previewPage;
+    previewPrevButton.disabled = true;
+    previewNextButton.disabled = true;
+    previewImage.hidden = true;
+    previewError.textContent = "";
+    previewPageLabel.textContent = `Loading page ${currentPage + 1} of ${previewPageCount}...`;
+    try {
+      const rendered = new Image();
+      await new Promise((resolve, reject) => {
+        rendered.onload = resolve;
+        rendered.onerror = () => reject(new Error("Preview unavailable or expired. Close the preview and apply edits again."));
+        rendered.src = `/api/edit/${previewResult.request_id}/${previewResult.download_token}/pages/${currentPage}`;
+      });
+      if (loadId !== previewLoadId) return;
+      previewImage.src = rendered.src;
+      previewImage.alt = `Edited PDF page ${currentPage + 1} of ${previewPageCount}`;
+      previewImage.hidden = false;
+      previewImage.parentElement.scrollTop = 0;
+      previewDownload.hidden = false;
+    } catch (error) {
+      if (loadId === previewLoadId) previewError.textContent = error.message;
+    } finally {
+      if (loadId === previewLoadId) {
+        previewPageLabel.textContent = `Page ${currentPage + 1} of ${previewPageCount}`;
+        previewPrevButton.disabled = currentPage === 0;
+        previewNextButton.disabled = currentPage >= previewPageCount - 1;
+      }
+    }
+  }
+
+  document.getElementById("edited-preview-close").addEventListener("click", () => previewDialog.close());
+  previewDialog.addEventListener("close", () => { previewLoadId += 1; });
+  previewPrevButton.addEventListener("click", () => { previewPage -= 1; loadEditedPreview(); });
+  previewNextButton.addEventListener("click", () => { previewPage += 1; loadEditedPreview(); });
 
   let session = null;
   let pageNumber = 0;
@@ -763,12 +813,14 @@
     downloadLink.style.display = "none";
   });
 
-  saveButton.addEventListener("click", async () => {
+  async function saveEdits(showPreview) {
     if (!session || !edits.length) {
       errorEl.textContent = "Add a redaction, add text, or replace text before saving.";
       return;
     }
     saveButton.disabled = true;
+    previewButton.disabled = true;
+    downloadLink.style.display = "none";
     errorEl.textContent = "";
     statusEl.textContent = "Applying edits...";
     try {
@@ -787,11 +839,24 @@
       const result = await response.json();
       downloadLink.href = `/api/download/${result.request_id}/${result.download_token}`;
       downloadLink.style.display = "inline";
-      statusEl.textContent = "Edited PDF is ready. Download it to review the result.";
+      statusEl.textContent = "Edited PDF is ready.";
+      if (showPreview) {
+        previewResult = result;
+        previewPage = pageNumber;
+        previewPageCount = session.pages.length;
+        previewDownload.href = downloadLink.href;
+        previewDownload.hidden = true;
+        previewDialog.showModal();
+        await loadEditedPreview();
+      }
     } catch (error) {
       setError(error);
     } finally {
       saveButton.disabled = false;
+      previewButton.disabled = false;
     }
-  });
+  }
+
+  saveButton.addEventListener("click", () => saveEdits(false));
+  previewButton.addEventListener("click", () => saveEdits(true));
 })();

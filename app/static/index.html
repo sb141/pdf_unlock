@@ -216,6 +216,13 @@
     .page-stage img { display: block; width: 100%; height: auto; max-width: none; max-height: none; }
     .page-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
     #edit-download { display: none; }
+    .edited-preview { width: min(1100px, 94vw); max-height: 94vh; box-sizing: border-box; padding: 18px; border: 1px solid var(--border); border-radius: 8px; }
+    .edited-preview::backdrop { background: rgba(0, 0, 0, 0.5); }
+    .edited-preview h2 { margin: 0; font-size: 20px; }
+    .edited-preview .editor-controls { justify-content: space-between; }
+    .edited-preview-viewport { max-height: 65vh; overflow: auto; background: #e9eff0; min-height: 180px; }
+    #edited-preview-image { display: block; width: 100%; height: auto; }
+    #edited-preview-image[hidden], #edited-preview-download[hidden] { display: none; }
     @media (max-width: 700px) {
       .site-header { margin: 12px auto; flex-wrap: wrap; }
       .site-nav { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
@@ -426,10 +433,29 @@
         <div class="editor-controls">
           <button type="button" id="edit-undo" class="btn-secondary">Undo last edit</button>
           <button type="button" id="edit-clear-page" class="btn-secondary">Clear this page</button>
+          <button type="button" id="edit-preview">Apply edits and preview</button>
           <button type="button" id="edit-save">Apply edits and download</button>
           <a id="edit-download" href="#">Download edited PDF</a>
         </div>
       </div>
+      <dialog id="edited-preview" class="edited-preview" aria-labelledby="edited-preview-title">
+        <div class="editor-controls">
+          <h2 id="edited-preview-title">Edited PDF preview</h2>
+          <button type="button" id="edited-preview-close" class="btn-secondary">Back to editing</button>
+        </div>
+        <div class="editor-controls">
+          <button type="button" id="edited-preview-prev" class="btn-secondary">Previous page</button>
+          <span id="edited-preview-page" aria-live="polite"></span>
+          <button type="button" id="edited-preview-next" class="btn-secondary">Next page</button>
+        </div>
+        <div id="edited-preview-error" class="error" role="alert"></div>
+        <div class="edited-preview-viewport">
+          <img id="edited-preview-image" alt="Edited PDF page" hidden />
+        </div>
+        <div class="editor-controls">
+          <a id="edited-preview-download" href="#" hidden>Download edited PDF</a>
+        </div>
+      </dialog>
     </section>
   </main>
 
@@ -589,7 +615,7 @@
       }
     });
   </script>
-  <script src="/static/editor.js?v=copy-paste-text"></script>
+  <script src="/static/editor.js?v=edited-preview"></script>
   <script src="/static/converter.js?v=word-to-pdf"></script>
 </body>
 </html>
